@@ -18,11 +18,11 @@
 
 package com.hyperdevs.poeditor.gradle
 
+import com.hyperdevs.poeditor.gradle.ktx.downloadUrlToString
+import com.hyperdevs.poeditor.gradle.network.PoEditorApiControllerImpl
 import com.hyperdevs.poeditor.gradle.network.api.PoEditorApi
 import com.hyperdevs.poeditor.gradle.utils.DateJsonAdapter
-import com.hyperdevs.poeditor.gradle.network.PoEditorApiControllerImpl
 import com.hyperdevs.poeditor.gradle.utils.TABLET_REGEX_STRING
-import com.hyperdevs.poeditor.gradle.ktx.downloadUrlToString
 import com.hyperdevs.poeditor.gradle.utils.logger
 import com.hyperdevs.poeditor.gradle.xml.AndroidXmlWriter
 import com.hyperdevs.poeditor.gradle.xml.XmlPostProcessor
@@ -50,6 +50,8 @@ object PoEditorStringsImporter {
     private const val CONNECT_TIMEOUT_SECONDS = 30L
     private const val READ_TIMEOUT_SECONDS = 30L
     private const val WRITE_TIMEOUT_SECONDS = 30L
+    private const val TRANSLATION_PERCENTAGE_MINIMUM = 85
+
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -86,11 +88,20 @@ object PoEditorStringsImporter {
             // Retrieve available languages from PoEditor
             logger.lifecycle("Retrieving project languages...")
             val projectLanguages = poEditorApiController.getProjectLanguages(projectId)
+            val skippedLanguages = mutableListOf<String>()
 
             // Iterate over every available language
             logger.lifecycle("Available languages: [${projectLanguages.joinToString(", ") { it.code }}]")
+            logger.lifecycle("Will skip languages translated under $TRANSLATION_PERCENTAGE_MINIMUM%")
+
             projectLanguages.forEach { languageData ->
                 val languageCode = languageData.code
+                val percentage = languageData.percentage
+
+                if (percentage < TRANSLATION_PERCENTAGE_MINIMUM) {
+                    skippedLanguages.add("$languageCode ($percentage%)")
+                    return@forEach
+                }
 
                 // Retrieve translation file URL for the given language and for the "android_strings" type,
                 // acknowledging passed tags if present
@@ -98,6 +109,7 @@ object PoEditorStringsImporter {
                 val translationFileUrl = poEditorApiController.getTranslationFileUrl(
                     projectId = projectId,
                     code = languageCode,
+                    filters = "translated",
                     type = "android_strings",
                     tags = tags)
 
@@ -118,6 +130,9 @@ object PoEditorStringsImporter {
                     languageValuesOverridePathMap
                 )
             }
+
+            logger.lifecycle("Skipped the following languages due to low terms translation percentage " +
+                "(threshold: $TRANSLATION_PERCENTAGE_MINIMUM%):\n${skippedLanguages.joinToString()}")
         } catch (e: Exception) {
             logger.error("An error happened when retrieving strings from project. " +
                 "Please review the plug-in's input parameters and try again")

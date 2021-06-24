@@ -111,6 +111,17 @@ tasks {
     // Idea from: https://gist.github.com/KenVanHoeylandt/c7a928426bce83ffab400ab1fd99054a
     getByPath("compileKotlin").dependsOn(installGitHooks)
 
+    jar {
+        manifest {
+            attributes["Main-Class"] = "com.hyperdevs.poeditor.gradle.PoEditorPlugin"
+        }
+        from(sourceSets.main.get().output)
+        dependsOn(configurations.runtimeClasspath)
+//        from({
+//            configurations.runtimeClasspath.get().filter { it.name.endsWith("jar") }.map { zipTree(it) }
+//        })
+    }
+
     val sourcesJar by creating(Jar::class) {
         dependsOn(JavaPlugin.CLASSES_TASK_NAME)
         classifier = "sources"
